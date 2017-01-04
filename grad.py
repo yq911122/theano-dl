@@ -9,9 +9,8 @@ import timeit
 
 class MSGD(object):
     """docstring for MSGD"""
-    _support_penalties = {'l1', 'l2'}
 
-    def __init__(self, batch_size=50, learning_rate=0.1, n_epoch=1000, criterion=0.05, penalty='l1', alpha=0.001):
+    def __init__(self, batch_size=50, learning_rate=0.1, n_epoch=20, criterion=0.05):
         super(MSGD, self).__init__()
         self.batch_size = batch_size
         self.learning_rate = learning_rate
@@ -20,75 +19,91 @@ class MSGD(object):
 
         self.cost = None
         self.errors = None
-
-        self.alpha = alpha
-        self.penalty = penalty
+        self.updates = None
 
         self.index = T.lscalar()
 
-        self.layers = []
         self.params = []
-        self.x_trans_params = []
 
-    def addLayer(self, layer, input_transform_parmas=None):
-        self.layers.append(layer)
-        self.params += layer.params
-        self.x_trans_params.append(input_transform_parmas)
-
-    def init_fitting(self, X, y):
-
-        for layer, tran in zip(self.layers, self.x_trans_params):
-            if tran is not None:
-                _name, _par = tran
-                try:
-                    method = getattr(X, _name)
-                    X = method(_par)
-                except AttributeError:
-                    raise AttributeError("No such method exists.")
-            X = layer.cal_output(X)
-
-
-        W = [param for param in self.params if param.ndim > 1]
-
-        if self.penalty == 'l1':
-            w_sum = [T.sum(abs(wi)) for wi in W]
+    def init_fitting(self, cost, params, error=None, updates=None):
+        self.cost = cost
+        self.params = params
+        if error is not None:
+            self.error = error
+        if updates is not None:
+            self.updates = updates
         else:
-            w_sum = [T.sum(wi**2) for wi in W]
+            grads = [T.grad(self.cost, param) for param in params]
+            self.updates = [(params_i, params_i - self.learning_rate*grad_i) for params_i, grad_i in zip(params, grads)]
 
-        penalty = T.sum(w_sum)
-
-        self.cost = self.layers[-1].cost(y) + self.alpha*penalty
-        self.error = self.layers[-1].error
-        return self
-
-    def fit(self, train_X, train_y, valid_X, valid_y):
-        x = T.matrix('x')
-        y = T.ivector('y')
-
-        self.init_fitting(x, y)
+    def fit(self, variables, datasets):
+        # check input
+        # check if cost, params, updates are set
 
         batch_size, learning_rate, index, params = self.batch_size, self.learning_rate, self.index, self.params
-        n_train_batches = train_X.get_value(borrow=True).shape[0] / batch_size
-        n_valid_batches = valid_X.get_value(borrow=True).shape[0] / batch_size
 
-        grads = [T.grad(self.cost, param) for param in params]
-        updates = [(params_i, params_i - learning_rate*grad_i) for params_i, grad_i in zip(params, grads)]        
+        n_train_batches = datasets[0].get_value(borrow=True).shape[0] / batch_size
+
+        if self.updates is None:
+            grads = [T.grad(self.cost, param) for param in params]
+            updates = [(params_i, params_i - learning_rate*grad_i) for params_i, grad_i in zip(params, grads)]
 
         train_model = theano.function(
             inputs=[index],
             outputs=self.cost,
-            updates=updates,
+            updates=self.updates,
             givens={
-                x: train_X[index*batch_size: (index+1)*batch_size],
-                y: train_y[index*batch_size: (index+1)*batch_size]
+                var: data[index*batch_size: (index+1)*batch_size] for var, data in zip(variables, datasets)
+            })
+
+        print('... training the model')
+
+        start_time = timeit.default_timer()
+
+        done_looping = False
+        epoch = 0
+        minibatch_avg_cost = []
+        for epoch in xrange(self.n_epoch):
+            for minibatch_index in range(n_train_batches):
+
+                minibatch_avg_cost += [train_model(minibatch_index)]
+
+        print ('cost %f' % (np.mean(minibatch_avg_cost)))
+
+        end_time = timeit.default_timer()
+       
+        print('The code run for %d epochs, with %f epochs/sec' % (
+            epoch + 1, 1. * epoch / (end_time - start_time)))
+
+        self.params = params
+        # save the best model
+        # with open('best_model_params.pkl', 'wb') as f:
+        #     pickle.dump(params, f)
+
+        return self
+
+
+    def fit_with_valid(self, variables, training_sets, validation_sets):
+        # check if cost, params, updates are set
+
+
+        batch_size, learning_rate, index, params = self.batch_size, self.learning_rate, self.index, self.params
+        n_train_batches = training_sets[0].get_value(borrow=True).shape[0] / batch_size
+        n_valid_batches = validation_sets[0].get_value(borrow=True).shape[0] / batch_size      
+
+        train_model = theano.function(
+            inputs=[index],
+            outputs=self.cost,
+            updates=self.updates,
+            givens={
+                var: data[index*batch_size: (index+1)*batch_size] for var, data in zip(variables, training_sets)
             })
 
         validate_model = theano.function(
             inputs=[index],
-            outputs=self.error(y),
+            outputs=self.error,
             givens={
-                x: valid_X[index*batch_size: (index+1)*batch_size],
-                y: valid_y[index*batch_size: (index+1)*batch_size]
+                var: data[index*batch_size: (index+1)*batch_size] for var, data in zip(variables, validation_sets)
             })
 
         print('... training the model')
@@ -105,7 +120,6 @@ class MSGD(object):
                                       # check every epoch
 
         best_validation_loss = np.inf
-        test_score = 0.
         start_time = timeit.default_timer()
 
         done_looping = False
@@ -164,71 +178,5 @@ class MSGD(object):
         with open('best_model_params.pkl', 'wb') as f:
             pickle.dump(params, f)
 
-        self.update_layer_params()
         return self
-
-    def update_layer_params(self):
-        n_params = sum(len(layer.params) for layer in self.layers)
-        if n_params != len(self.params):
-            raise ValueError("Inconsistent parameters number")
-
-        j = 0
-        for layer in self.layers:
-            for i in xrange(len(layer.params)):
-                layer.params[i] = self.params[j]
-                j += 1
-
-    def predict(self, test_X):
-        index = self.index
-        n_size = test_X.get_value(borrow=True).shape[0]
-        # n_size = 50
-        x = T.matrix('x')
-        output = x
-        for layer in self.layers:
-            output = layer.cal_output(output)
-        pred = theano.function(
-            inputs=[index],
-            outputs=self.layers[-1].get_predict(),
-            givens={x: test_X[:index]}
-            )
-        return pred(n_size)
-
-    def predict_proba(self, test_X):
-        index = self.index
-        n_size = test_X.get_value(borrow=True).shape[0]
-        # n_size = 10
-        x = T.matrix('x')
-        output = x
-        for layer in self.layers:
-            output = layer.cal_output(output)
-        pred = theano.function(
-            inputs=[index],
-            outputs=output,
-            givens={x: test_X[:index]}
-            )
-        return pred(n_size)
-
-    def score(self, test_X, test_y):
-        x = T.matrix('x')
-        y = T.ivector('y')
-        index = self.index
-        n_size = test_X.get_value(borrow=True).shape[0]
-        output = x
-        for layer in self.layers:
-            output = layer.cal_output(output)
-        pred_y = self.layers[-1].get_predict()
-        error = T.mean(T.neq(pred_y, y))
-        get_error = theano.function(
-            inputs=[index],
-            outputs=error,
-            givens={x: test_X[:index], y: test_y[:index]}
-            )
-        return get_error(n_size)
-
-
-class UnSupervisedMSGD(object):
-    """docstring for UnSupervisedMSGD"""
-    def __init__(self, arg):
-        super(UnSupervisedMSGD, self).__init__()
-        self.arg = arg
         
