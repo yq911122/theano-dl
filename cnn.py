@@ -7,7 +7,21 @@ from basenet import SuperVisedBaseNet
 
 class CNN2(SuperVisedBaseNet):
     """docstring for CNN2"""
-    def __init__(self, img_shape, n_feats, poolsizes, filter_shapes,  n_hidden, n_out, rng=None, activations=None, batch_size=50, learning_rate=0.1, n_epoch=20, criterion=0.05, penalty='l1', alpha=0.001):
+    def __init__(self, 
+        img_shape, 
+        n_feats, 
+        poolsizes, 
+        filter_shapes,  
+        n_hidden, 
+        n_out, 
+        rng=None, 
+        activations=None, 
+        batch_size=50, 
+        learning_rate=0.1, 
+        n_epoch=20, 
+        criterion=0.05, 
+        penalty='l1', 
+        alpha=0.001):
         super(CNN2, self).__init__(
             batch_size=batch_size,
             learning_rate=learning_rate, 
