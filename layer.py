@@ -5,7 +5,42 @@ import numpy as np
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
 class Layer(object):
-    """docstring for Layer"""
+    """Base Class for network layer.
+    
+    Parameters
+    ----------
+    n_in : int
+        dimension of the input to the layer
+
+    n_out : int
+        dimension of the output of the layer
+
+    rng : np.random.RandomState, optional (default=None)
+        random state for parameter random initation
+
+    W : Theano shared variable, optional (default=None)
+        wieght parameters of the layer
+
+    b : Theano shared variable, optional (default=None)
+        bias parameters of the layer
+
+    activation : function, optional (default=None)
+        activation function
+
+    Attributes
+    ----------
+    rng : np.random.RandomState
+
+    W : Theano shared variable; wieght parameters of the layer
+
+    b : Theano shared variable; bias parameters of the layer
+
+    params :  List; list that stores layer parameters
+
+    activation : function; activation function
+    
+    output : Theano variable; layer output
+    """
     def __init__(self, n_in, n_out, rng=None, W=None, b=None, activation=None):
         super(Layer, self).__init__()
         if rng is None:
@@ -37,13 +72,58 @@ class Layer(object):
         self.activation = activation
 
 
-    def cal_output(self, X):        
+    def cal_output(self, X):
+        """calculate output of the layer given X as input
+        
+        Parameters
+        ----------
+        X : Theano variable; input to the layer
+
+        Return
+        ------
+        output : Theano variable; output of the layer
+
+        """
         output_val = T.dot(X, self.W) + self.b
         self.output = self.activation(output_val) if self.activation else output_val
         return self.output
 
 class LogitLayer(Layer):
-    """docstring for LogitLayer"""
+    """layer applying logit activation. Normally, this layer will be as the output layer.
+
+    Parameters
+    ----------
+    n_in : int
+        dimension of the input to the layer
+
+    n_out : int
+        dimension of the output of the layer
+
+    rng : np.random.RandomState, optional (default=None)
+        random state for parameter random initation
+
+    W : Theano shared variable, optional (default=None)
+        wieght parameters of the layer
+
+    b : Theano shared variable, optional (default=None)
+        bias parameters of the layer
+
+    Attributes
+    ----------
+    rng : np.random.RandomState
+
+    W : Theano shared variable; wieght parameters of the layer
+
+    b : Theano shared variable; bias parameters of the layer
+
+    params :  List; list that stores layer parameters
+
+    activation : T.nnet.softmax
+    
+    output : Theano variable; layer output, also the class probability
+
+    y_pred : Theano variable; predicted class based on the output
+    """
     def __init__(self, n_in, n_out, rng=None, W=None, b=None):
         super(LogitLayer, self).__init__(
             n_in=n_in, 
@@ -54,21 +134,66 @@ class LogitLayer(Layer):
             activation=T.nnet.softmax)
 
     def cal_output(self, X):
+        """calculate output of the layer given X as input
+        
+        Parameters
+        ----------
+        X : Theano variable; input to the layer
+
+        Return
+        ------
+        output : Theano variable; output of the layer
+
+        """
         super(LogitLayer, self).cal_output(X)
         
         self.y_pred = T.argmax(self.output, axis=1)
         return self.output
 
     def get_predict(self):
+        """return y_pred
+
+        Return
+        ------
+        self.y_pred : Theano variable; predicted class based on the output
+
+        """
         return self.y_pred
 
     def get_predict_proba(self):
+        """return predict probability of class
+
+        Return
+        ------
+        self.output : Theano variable; predict probability of class
+        
+        """
         return self.output
 
     def cost(self, y):
+        """calculate average negative loglikelyhood as cost
+
+        Parameters
+        ----------
+        y : Theano variable; test target
+
+        Return
+        ------
+        NLL : Theano variable; cost
+        """
         return -T.mean(T.log(self.output)[T.arange(y.shape[0]), y])
 
     def error(self, y):
+        """calculate mis-classification error
+
+        Parameters
+        ----------
+        y : Theano variable; type=int, test target
+
+        Return
+        ------
+        error : Theano variable; mis-classification error
+        """
         if y.ndim != self.y_pred.ndim:
             raise TypeError(
                 'y should have the same shape as self.y_pred',
@@ -85,9 +210,52 @@ class LogitLayer(Layer):
 from theano.tensor.signal import pool
 from theano.tensor.nnet import conv2d
 
-class ConvPoolLayer(Layer):
-    """docstring for ConvPoolLayer"""
-    def __init__(self, filter_shape, image_shape, poolsize=(2, 2), rng=None, W=None, b=None, activation=None):
+class ConvPoolLayer2D(Layer):
+    """Convolution and pooling layer for 2d input, like image. In the layer, a pooling operation is followed by a concolution operation.
+
+    Parameters
+    ----------
+    filter_shape : tuple (n_output_feature_maps, n_input_feature_maps, filter_height, filter_width)
+
+    image_shape : tuple (batch_size, n_input_feature_maps, input_height, input_width)
+
+    poolsize : tuple (height, height)
+        size to applying pooling
+
+    rng : np.random.RandomState, optional (default=None)
+        random state for parameter random initation
+
+    W : Theano shared variable, optional (default=None)
+        wieght parameters of the layer
+
+    b : Theano shared variable, optional (default=None)
+        bias parameters of the layer
+
+    activation : function, optional (default=T.tanh)
+        activation function
+
+    Attributes
+    ----------
+    filter_shape : tuple (n_output_feature_maps, n_input_feature_maps, filter_height, filter_width)
+    
+    image_shape : tuple (batch_size, n_input_feature_maps, input_height, input_width)
+
+    poolsize : tuple (height, height)
+        size to applying pooling
+    
+    rng : np.random.RandomState
+
+    W : Theano shared variable; wieght parameters of the layer
+
+    b : Theano shared variable; bias parameters of the layer
+
+    params :  List; list that stores layer parameters
+
+    activation : activation function
+    
+    output : Theano variable; layer output, also the class probability
+    """
+    def __init__(self, filter_shape, image_shape, poolsize=(2, 2), rng=None, W=None, b=None, activation=T.tanh):
         if rng is None:
             self.rng = np.random.RandomState(1123)
         
@@ -110,7 +278,7 @@ class ConvPoolLayer(Layer):
             b_values = np.zeros((filter_shape[0],), dtype=theano.config.floatX)
             b = theano.shared(value=b_values, borrow=True)
 
-        super(ConvPoolLayer, self).__init__(
+        super(ConvPoolLayer2D, self).__init__(
             n_in=fan_in, 
             n_out=fan_out, 
             rng=self.rng,
@@ -123,7 +291,17 @@ class ConvPoolLayer(Layer):
         self.poolsize = poolsize
 
     def cal_output(self, X):
-        # convolve input feature maps with filters
+        """calculate output after convolution and pooling operations of the layer given X as input
+        
+        Parameters
+        ----------
+        X : Theano variable; input to the layer
+
+        Return
+        ------
+        output : Theano variable; output of the layer
+
+        """
         conv_out = conv2d(
             input=X,
             filters=self.W,
@@ -138,17 +316,68 @@ class ConvPoolLayer(Layer):
             ignore_border=True
         )
 
-        # add the bias term. Since the bias is a vector (1D array), we first
-        # reshape it to a tensor of shape (1, n_filters, 1, 1). Each bias will
-        # thus be broadcasted across mini-batches and feature map
-        # width & height
         output_val = pooled_out + self.b.dimshuffle('x', 0, 'x', 'x')
         self.output = self.activation(output_val) if self.activation else output_val
 
         return self.output
         
 class dA(Layer):
-    """docstring for dA"""
+    """denoising Autoencoder layer. It is actually a 3-layer structure: input-hidden-output, where the dimensions of the input layer and the output layer are the same.
+    
+    Parameters
+    ----------
+    n_in : int
+        dimension of the input to the layer
+
+    n_hidden : int
+        dimension of the n_hidden layer
+
+    rng : np.random.RandomState, optional (default=None)
+        random state for parameter random initation
+
+    theano_rng : theano.sandbox.rng_mrg.MRG_RandomStreams, optional (default=None)
+        random state for corruption calculation    
+    
+    W : Theano shared variable, optional (default=None)
+        wieght parameters of the layer
+
+    bvis : Theano shared variable, optional (default=None)
+        bias parameters of the output layer
+
+    bhid : Theano shared variable, optional (default=None)
+        bias parameters of the hidden layer
+
+    activation : function, optional (default=T.nnet.sigmoid)
+        activation function
+
+    corruption_level : float, optional (default=0.1)
+        corruption level of input
+
+    Attributes
+    ----------
+    rng : np.random.RandomState
+
+    theano_rng : theano.sandbox.rng_mrg.MRG_RandomStreams, optional (default=None)
+        random state for corruption calculation
+
+    W : Theano shared variable; wieght parameters of the input layer
+
+    b : Theano shared variable; bias parameters of the hidden layer
+
+    W_prime : Theano shared variable; wieght parameters of the hidden layer
+
+    b_prime : Theano shared variable; wieght parameters of the output layer
+
+    params :  List; list that stores layer parameters
+
+    activation : function; activation function
+    
+    output : Theano variable; layer output
+
+    corruption_level : float, optional (default=0.1)
+        corruption level of input
+
+    """
     def __init__(self, n_in, n_hidden, rng=None, theano_rng=None, W=None, bvis=None, bhid=None, activation=T.nnet.sigmoid, corruption_level=0.1):
         super(dA, self).__init__(
             n_in=n_in, 
@@ -178,74 +407,158 @@ class dA(Layer):
         self.corruption_level = corruption_level
 
     def get_hidden_output(self, X):
+        """calculate output of the hidden layer given X as input
+        
+        Parameters
+        ----------
+        X : Theano variable; input to the input layer
+
+        Return
+        ------
+        output : Theano variable; output of the hidden layer
+
+        """
     	return super(dA, self).cal_output(X)
 
     def get_vis_output(self, X):
+        """calculate output of the output layer given X as input of the hidden layer
+        
+        Parameters
+        ----------
+        X : Theano variable; input to the hidden layer
+
+        Return
+        ------
+        output : Theano variable; output of the output layer
+
+        """
     	output_val = T.dot(X, self.W_prime) + self.b_prime
         self.output = self.activation(output_val) if self.activation else output_val
         return self.output
 
     def cal_output(self, X):
+        """same with get_hidden_output(self, X)
+        """
         return self.get_hidden_output(X)
 
     def cal_final_output(self, X):
+        """calculate output of the output layer given X as input of the input layer
+        
+        Parameters
+        ----------
+        X : Theano variable; input to the input layer
+
+        Return
+        ------
+        output : Theano variable; output of the output layer
+
+        """
     	y = self.get_hidden_output(X)
         return self.get_vis_output(y)
 
     def cost(self, x):
-        tilde_x = self.get_corrupted_input(x, self.corruption_level)
+        """calculate average entropy as cost
+
+        Parameters
+        ----------
+        x : Theano variable; input
+
+        Return
+        ------
+        cost : Theano variable; cost
+        """
+        tilde_x = self.get_corrupted_input(x)
         y = self.cal_final_output(tilde_x)
         L = - T.sum(x * T.log(y) + (1 - x) * T.log(1 - y), axis=1)
     	return T.mean(L)
 
-    def get_corrupted_input(self, input, corruption_level):
+    def get_corrupted_input(self, input):
+        """get corrupted input
+
+        Parameters
+        ----------
+        input : Theano variable; input
+
+        Return
+        ------
+        corrupted_input : Theano variable; corrupted_input
+        """
+
         return self.theano_rng.binomial(size=input.shape, n=1,
-                                        p=1 - corruption_level,
+                                        p=1 - self.corruption_level,
                                         dtype=theano.config.floatX) * input
 
 class RBMLayer(Layer):
-    """Restricted Boltzmann Machine (RBM)  """
+    """restricted boltzmann machine
+    
+    Parameters
+    ----------
+    n_visible : int
+        dimension of the input to (also output of) the layer
+
+    n_hidden : int
+        dimension of the n_hidden layer
+
+    rng : np.random.RandomState, optional (default=None)
+        random state for parameter random initation
+
+    theano_rng : theano.sandbox.rng_mrg.MRG_RandomStreams, optional (default=None)
+        random state for corruption calculation    
+    
+    W : Theano shared variable, optional (default=None)
+        wieght parameters of the layer
+
+    bvis : Theano shared variable, optional (default=None)
+        bias parameters of the output (also input) layer
+
+    bhid : Theano shared variable, optional (default=None)
+        bias parameters of the hidden layer
+
+    activation : function, optional (default=T.nnet.sigmoid)
+        activation function
+
+    k : int, steps for CD-K sampling
+
+    Attributes
+    ----------
+    rng : np.random.RandomState
+
+    theano_rng : theano.sandbox.rng_mrg.MRG_RandomStreams, optional (default=None)
+        random state for corruption calculation
+
+    W : Theano shared variable; wieght parameters of the input layer
+
+    b : Theano shared variable; bias parameters of the hidden layer
+
+    b_prime : Theano shared variable; wieght parameters of the output layer
+
+    params :  List; list that stores layer parameters
+
+    activation : function; activation function
+    
+    output : Theano variable; layer output
+
+    corruption_level : float, optional (default=0.1)
+        corruption level of input
+
+    """
     def __init__(
         self,
         n_visible,
         n_hidden,
         W=None,
-        hbias=None,
-        vbias=None,
+        bhid=None,
+        bvis=None,
         rng=None,
         theano_rng=None,
         activation=T.nnet.sigmoid,
         k=1
     ):
-        """
-        RBM constructor. Defines the parameters of the model along with
-        basic operations for inferring hidden from visible (and vice-versa),
-        as well as for performing CD updates.
-
-        :param input: None for standalone RBMs or symbolic variable if RBM is
-        part of a larger graph.
-
-        :param n_visible: number of visible units
-
-        :param n_hidden: number of hidden units
-
-        :param W: None for standalone RBMs or symbolic variable pointing to a
-        shared weight matrix in case RBM is part of a DBN network; in a DBN,
-        the weights are shared between RBMs and layers of a MLP
-
-        :param hbias: None for standalone RBMs or symbolic variable pointing
-        to a shared hidden units bias vector in case RBM is part of a
-        different network
-
-        :param vbias: None for standalone RBMs or a symbolic variable
-        pointing to a shared visible units bias
-        """
 
         self.n_visible = n_visible
         self.n_hidden = n_hidden
 
         if rng is None:
-            # create a number generator
             rng = np.random.RandomState(1234)
 
         if theano_rng is None:
@@ -256,38 +569,33 @@ class RBMLayer(Layer):
         	n_out=n_hidden,
         	rng=rng, 
         	W=W, 
-        	b=hbias, 
+        	b=bhid, 
         	activation=activation
         	)       
 
-        if vbias is None:
-            # create shared variable for visible units bias
-            vbias = theano.shared(
+        if bvis is None:
+            bvis = theano.shared(
                 value=np.zeros(
                     n_visible,
                     dtype=theano.config.floatX
                 ),
-                name='vbias',
+                name='bvis',
                 borrow=True
             )
 
-
-        # initialize input layer for standalone RBM or layer0 of DBN
-
-        self.hbias = self.b
-        self.vbias = vbias
+        self.bhid = self.b
+        self.bvis = bvis
         self.theano_rng = theano_rng
-        # **** WARNING: It is not a good idea to put things in this list
-        # other than shared variables created in this function.
-        self.params = [self.W, self.hbias, self.vbias]
+
+        self.params = [self.W, self.bhid, self.bvis]
         self.k = k
 
     def free_energy(self, v_sample):
         ''' Function to compute the free energy '''
-        wx_b = T.dot(v_sample, self.W) + self.hbias
-        vbias_term = T.dot(v_sample, self.vbias)
+        wx_b = T.dot(v_sample, self.W) + self.bhid
+        bvis_term = T.dot(v_sample, self.bvis)
         hidden_term = T.sum(T.log(1 + T.exp(wx_b)), axis=1)
-        return -hidden_term - vbias_term
+        return -hidden_term - bvis_term
 
     def propup(self, vis):
         '''This function propagates the visible units activation upwards to
@@ -300,7 +608,7 @@ class RBMLayer(Layer):
         reconstruction cost function)
 
         '''
-        pre_sigmoid_activation = T.dot(vis, self.W) + self.hbias
+        pre_sigmoid_activation = T.dot(vis, self.W) + self.bhid
         return [pre_sigmoid_activation, T.nnet.sigmoid(pre_sigmoid_activation)]
 
     def sample_h_given_v(self, v0_sample):
@@ -328,7 +636,7 @@ class RBMLayer(Layer):
         reconstruction cost function)
 
         '''
-        pre_sigmoid_activation = T.dot(hid, self.W.T) + self.vbias
+        pre_sigmoid_activation = T.dot(hid, self.W.T) + self.bvis
         return [pre_sigmoid_activation, T.nnet.sigmoid(pre_sigmoid_activation)]
 
     def sample_v_given_h(self, h0_sample):
@@ -360,7 +668,6 @@ class RBMLayer(Layer):
         return [pre_sigmoid_h1, h1_mean, h1_sample,
                 pre_sigmoid_v1, v1_mean, v1_sample]
 
-    # start-snippet-2
     def get_cost_updates(self, X, lr=0.1):
         """This functions implements one step of CD-k or PCD-k
 
@@ -374,18 +681,10 @@ class RBMLayer(Layer):
 
         """
 
-        # compute positive phase
         pre_sigmoid_ph, ph_mean, ph_sample = self.sample_h_given_v(X)
 
         chain_start = ph_sample
 
-        # end-snippet-2
-        # perform actual negative phase
-        # in order to implement CD-k/PCD-k we need to scan over the
-        # function that implements one gibbs step k times.
-        # Read Theano tutorial on scan for more information :
-        # http://deeplearning.net/software/theano/library/scan.html
-        # the scan will return the entire Gibbs chain
         (
             [
                 pre_sigmoid_nvs,
@@ -405,59 +704,23 @@ class RBMLayer(Layer):
             n_steps=self.k,
             name="gibbs_hvh"
         )
-        # start-snippet-3
-        # determine gradients on RBM parameters
-        # note that we only need the sample at the end of the chain
+
         chain_end = nv_samples[-1]
 
         cost = T.mean(self.free_energy(X)) - T.mean(
             self.free_energy(chain_end))
-        # We must not compute the gradient through the gibbs sampling
+
         gparams = T.grad(cost, self.params, consider_constant=[chain_end])
-        # end-snippet-3 start-snippet-4
-        # constructs the update dictionary
+
         for gparam, param in zip(gparams, self.params):
-            # make sure that the learning rate is of the right dtype
-            updates[param] = param - gparam * T.cast(
-                lr,
-                dtype=theano.config.floatX
-            )
+            updates[param] = param - gparam * lr
 
-        # reconstruction cross-entropy is a better proxy for CD
         monitoring_cost = self.get_reconstruction_cost(X, pre_sigmoid_nvs[-1])
-
-
+        
         return monitoring_cost, updates
-        # end-snippet-4
 
     def get_reconstruction_cost(self, X, pre_sigmoid_nv):
         """Approximation to the reconstruction error
-
-        Note that this function requires the pre-sigmoid activation as
-        input.  To understand why this is so you need to understand a
-        bit about how Theano works. Whenever you compile a Theano
-        function, the computational graph that you pass as input gets
-        optimized for speed and stability.  This is done by changing
-        several parts of the subgraphs with others.  One such
-        optimization expresses terms of the form log(sigmoid(x)) in
-        terms of softplus.  We need this optimization for the
-        cross-entropy since sigmoid of numbers larger than 30. (or
-        even less then that) turn to 1. and numbers smaller than
-        -30. turn to 0 which in terms will force theano to compute
-        log(0) and therefore we will get either -inf or NaN as
-        cost. If the value is expressed in terms of softplus we do not
-        get this undesirable behaviour. This optimization usually
-        works fine, but here we have a special case. The sigmoid is
-        applied inside the scan op, while the log is
-        outside. Therefore Theano will only see log(scan(..)) instead
-        of log(sigmoid(..)) and will not apply the wanted
-        optimization. We can not go and replace the sigmoid in scan
-        with something else also, because this only needs to be done
-        on the last step. Therefore the easiest and more efficient way
-        is to get also the pre-sigmoid activation as an output of
-        scan, and apply both the log and sigmoid outside scan such
-        that Theano can catch and optimize the expression.
-
         """
 
         cross_entropy = T.mean(

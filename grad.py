@@ -8,7 +8,45 @@ import numpy as np
 import timeit
 
 class MSGD(object):
-    """docstring for MSGD"""
+    """Class for Mini-batch stochastic gradient descent algorithm
+
+    Parameters
+    ----------
+    batch_size : int; optional (default=50)
+        batch size of input for mini-batch stochastic gradient descent (MSGD) algorithm
+    
+    learning_rate : float; optional (default=0.01)
+        learning rate for updating parameters in MSGD. For more details, see grad.py
+
+    n_epoch : int; optional (default=20)
+        maximum epoches in training. For more details, see grad.py
+
+    criterion : float; optional (default=0.05)
+        when a validation set is provided in fitting phase, a patience mechanism will be introduced and it will update its best result only if the current result is better than ( 1 - criteron ) * previous_best_result.
+
+    Attributes
+    ----------
+    batch_size : int
+        batch size of input
+    
+    learning_rate : float
+        learning rate for updating parameters
+
+    n_epoch : int
+        maximum epoches in training
+
+    criterion : float
+        when a validation set is provided in fitting phase, a patience mechanism will be introduced and it will update its best result only if the current result is better than ( 1 - criteron ) * previous_best_result
+
+    cost : Theano variable; cost
+
+    errors : Theano variable; mis-classification error on validation set
+
+    updates : List-like, parameters updating rules during training
+
+    params : List[Theano shared variable], parameters to be updated during training 
+
+    """
 
     def __init__(self, batch_size=50, learning_rate=0.1, n_epoch=20, criterion=0.05):
         super(MSGD, self).__init__()
@@ -26,6 +64,20 @@ class MSGD(object):
         self.params = []
 
     def init_fitting(self, cost, params, error=None, updates=None):
+        """initiate training process
+        
+        Parameters
+        ----------
+        cost : Theano variable; cost
+
+        params : List[Theano shared variable], parameters to be updated during training 
+
+        errors : Theano variable, optional (default=None); mis-classification error on validation set
+
+        updates : List-like, optional (default=None); parameters updating rules during training
+
+        """
+
         self.cost = cost
         self.params = params
         if error is not None:
@@ -37,6 +89,18 @@ class MSGD(object):
             self.updates = [(params_i, params_i - self.learning_rate*grad_i) for params_i, grad_i in zip(params, grads)]
 
     def fit(self, variables, datasets):
+        """run the MSGD algorithm on variables given data as datasets
+        
+        Parameters
+        ----------
+        variables : List[Theano variable]; parameters to be updated during the training
+
+        datasets : List[Theano shared variable]; corrspending data for the parameters
+
+        Return
+        ------
+        self : object
+        """
         # check input
         # check if cost, params, updates are set
 
@@ -84,6 +148,21 @@ class MSGD(object):
 
 
     def fit_with_valid(self, variables, training_sets, validation_sets):
+        """run the MSGD algorithm on variables given data as training_sets. validation_sets is utilized for early stopping
+        
+        Parameters
+        ----------
+        variables : List[Theano variable]; parameters to be updated during the training
+
+        training_sets : List[Theano shared variable]; corrspending training data for the parameters
+
+        validation_sets : List[Theano shared variable]; corrspending validation data for the parameters
+
+        Return
+        ------
+        self : object
+        """
+
         # check if cost, params, updates are set
 
 

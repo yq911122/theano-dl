@@ -62,3 +62,68 @@ def load_data(dataset):
     rval = [(train_set_x, train_set_y), (valid_set_x, valid_set_y),
             (test_set_x, test_set_y)]
     return rval
+
+# from test import load_data
+
+# url = './data/mnist.pkl.gz'
+
+# datasets = load_data(url)
+
+# train_set_x, train_set_y = datasets[0]
+# valid_set_x, valid_set_y = datasets[1]
+# test_set_x, test_set_y = datasets[2]
+
+# model = MLP(28 * 28, 500, 10)
+# model.fit(train_set_x, train_set_y, valid_set_x, valid_set_y)
+
+
+
+# print model.score(test_set_x, test_set_y)
+# img_shape = (28, 28)
+# n_feats = (1, 20, 50)
+# poolsizes = ((2,2),(2,2))
+# filter_shapes = ((5,5),(5,5))
+# n_hidden = 500
+# n_out = 10
+# activations=[T.tanh]*2
+
+# model = CNN2(
+#     img_shape=img_shape,
+#     n_feats=n_feats,
+#     poolsizes=poolsizes,
+#     filter_shapes=filter_shapes,
+#     n_hidden=n_hidden,
+#     n_out=n_out)
+
+# # model.fit(train_set_x, train_set_y, valid_set_x, valid_set_y)
+# f = open('best_model_params.pkl', 'rb')
+# params = pickle.load(f)
+# f.close()
+
+# model.params = params
+# print model.score(test_set_x, test_set_y)
+
+
+# model = SdA(
+#     n_in=28 * 28,
+#     n_hiddens=[1000, 1000, 1000],
+#     n_out=10,
+#     corruption_levels=[0.2,0.2,0.2])
+
+# model.prefit(train_set_x)
+# model.fit(train_set_x, train_set_y, valid_set_x, valid_set_y)
+
+# model = MLP(
+#     n_in=28 * 28,
+#     n_hiddens=[1000],
+#     n_out=10)
+# model.fit(train_set_x, train_set_y, valid_set_x, valid_set_y)
+
+# model = DBN(
+#     n_in=28 * 28, 
+#     n_hiddens=[1000, 1000, 1000], 
+#     n_out=10, 
+#     k=2)
+
+# model.prefit(train_set_x)
+# model.fit(train_set_x, train_set_y, valid_set_x, valid_set_y)
